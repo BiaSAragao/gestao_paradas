@@ -1,8 +1,0 @@
-streamlit
-pandas
-folium
-streamlit-folium
-sqlalchemy
-psycopg2-binary
-geopy
-streamlit-js-eval
