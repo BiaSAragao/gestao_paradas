@@ -297,20 +297,19 @@ with tab3:
             "Tipo": p.tipo
         } for p in todas])
 
-        # ---------- INDICADORES ----------
+        # ================= INDICADORES =================
         total_paradas = len(df)
         total_bairros = df["Bairro"].nunique()
         total_ruas = df["Rua"].nunique()
 
         c1, c2, c3 = st.columns(3)
-
         c1.metric("🚌 Total de Paradas", total_paradas)
         c2.metric("🏘️ Bairros Atendidos", total_bairros)
-        c3.metric("🛣️ Ruas/Avenidas", total_ruas)
+        c3.metric("🛣️ Ruas / Avenidas", total_ruas)
 
         st.divider()
 
-        # ---------- PARADAS POR BAIRRO ----------
+        # ================= PARADAS POR BAIRRO =================
         st.markdown("### 📍 Paradas por Bairro")
 
         bairro_counts = (
@@ -318,31 +317,46 @@ with tab3:
             .value_counts()
             .reset_index()
         )
-        
         bairro_counts.columns = ["Bairro", "Quantidade"]
 
-        # ---------- TOP 10 RUAS ----------
+        st.bar_chart(
+            bairro_counts.set_index("Bairro")
+        )
+
+        st.divider()
+
+        # ================= TOP 10 RUAS =================
         st.markdown("### 🏆 Top 10 Ruas/Avenidas com Mais Paradas")
 
         top_ruas = (
             df["Rua"]
             .value_counts()
             .head(10)
-            .sort_values()
+            .reset_index()
         )
+        top_ruas.columns = ["Rua/Avenida", "Quantidade"]
 
-        st.bar_chart(top_ruas)
+        max_qtd = top_ruas["Quantidade"].max()
+
+        for i, row in top_ruas.iterrows():
+            st.markdown(f"**{i+1}º — {row['Rua/Avenida']}**")
+            st.progress(row["Quantidade"] / max_qtd)
 
         st.divider()
 
-        # ---------- TIPO DE PARADA ----------
+        # ================= TIPO DE PARADA =================
         st.markdown("### 🏗️ Tipologia das Paradas")
 
-        tipo_counts = df["Tipo"].value_counts()
+        tipo_counts = (
+            df["Tipo"]
+            .value_counts()
+            .sort_values(ascending=False)
+        )
 
         st.bar_chart(tipo_counts)
 
 db.close()
+
 
 
 
