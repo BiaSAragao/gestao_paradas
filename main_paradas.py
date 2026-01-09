@@ -11,31 +11,19 @@ from geopy.geocoders import Nominatim
 from streamlit_js_eval import streamlit_js_eval
 
 # --- CONFIGURAÇÃO DO BANCO DE DADOS ---
-# Tenta pegar primeiro do Streamlit Secrets, depois do Ambiente (terminal)
 DATABASE_URL = st.secrets.get("DATABASE_URL") or os.getenv("DATABASE_URL")
 
 if not DATABASE_URL:
-    st.error("⚠️ Erro: A URL do banco de dados não foi configurada nos Secrets.")
+    st.error("⚠️ Erro: URL do banco de dados não configurada.")
     st.stop()
 
-# Garante que o link comece com postgresql:// (obrigatório para SQLAlchemy)
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-try:
-    engine = create_engine(DATABASE_URL, echo=False, future=True)
-    # Tenta conectar rápido para ver se a URL é válida
-    with engine.connect() as conn:
-        pass
-except Exception as e:
-    st.error(f"❌ Erro de Conexão: A URL fornecida é inválida ou o banco recusou a conexão.")
-    st.stop()
-
-engine = create_engine(DATABASE_URL, echo=False, future=True)
+engine = create_engine(DATABASE_URL, echo=False, future=True, pool_pre_ping=True)
 SessionLocal = scoped_session(sessionmaker(bind=engine, autoflush=False, autocommit=False))
 Base = declarative_base()
 
-# --- MODELO DA TABELA ---
 class Parada(Base):
     __tablename__ = "paradas"
     id = Column(Integer, primary_key=True)
@@ -53,137 +41,141 @@ class Parada(Base):
     data_cadastro = Column(DateTime, default=datetime.now)
 
 Base.metadata.create_all(bind=engine)
-geolocator = Nominatim(user_agent="sipo_semob_fsa_v3")
+geolocator = Nominatim(user_agent="sipo_semob_fsa_v4")
 
-# --- INTERFACE ---
 st.set_page_config(page_title="SIP - SEMOB FSA", layout="wide", page_icon="🚌")
 
+# --- ESTILIZAÇÃO PARA EVITAR PISCADAS ---
+st.markdown("<style>#MainMenu {visibility: hidden;} footer {visibility: hidden;}</style>", unsafe_allow_html=True)
+
 st.title("🚌 SIP - Sistema de Inventário de Paradas")
-st.caption("Gestão de Ativos de Mobilidade Urbana - Feira de Santana")
+st.caption("Gestão de Ativos - Feira de Santana")
 
 tab1, tab2 = st.tabs(["📝 Cadastrar Parada", "📍 Visualizar Mapa e Dados"])
 db = SessionLocal()
 
 # --- ABA 1: CADASTRO ---
 with tab1:
-    # Inicialização do Session State para persistência de dados
+    # Inicialização do Session State
     if 'lat_input' not in st.session_state: st.session_state.lat_input = -12.250000
     if 'lon_input' not in st.session_state: st.session_state.lon_input = -38.950000
-    for field in ['rua_input', 'bairro_input', 'num_input', 'cep_input']:
-        if field not in st.session_state: st.session_state[field] = ""
+    if 'form_data' not in st.session_state:
+        st.session_state.form_data = {'rua': '', 'bairro': '', 'num': '', 'cep': '', 'id': ''}
 
     st.markdown("### 🗺️ Localização e GPS")
     
-    # Captura GPS em Tempo Real
+    # Captura GPS em segundo plano
     loc_data = streamlit_js_eval(js_expressions='navigator.geolocation.getCurrentPosition(pos => { return pos.coords; })', key='gps_capture')
 
-    col_gps, col_ajuda = st.columns([1, 2])
-    with col_gps:
-        if st.button("📍 CAPTURAR MINHA LOCALIZAÇÃO ATUAL", use_container_width=True, type="primary"):
+    col_btn, col_txt = st.columns([1, 2])
+    with col_btn:
+        if st.button("📍 USAR MINHA POSIÇÃO ATUAL", use_container_width=True, type="primary"):
             if loc_data:
                 st.session_state.lat_input = loc_data['latitude']
                 st.session_state.lon_input = loc_data['longitude']
                 try:
-                    rev = geolocator.reverse(f"{st.session_state.lat_input}, {st.session_state.lon_input}", timeout=10)
+                    rev = geolocator.reverse(f"{st.session_state.lat_input}, {st.session_state.lon_input}", timeout=5)
                     if rev:
                         addr = rev.raw.get('address', {})
-                        st.session_state.rua_input = addr.get('road', addr.get('street', ''))
-                        st.session_state.bairro_input = addr.get('suburb', addr.get('neighbourhood', ''))
-                        st.session_state.num_input = addr.get('house_number', '')
-                        st.session_state.cep_input = addr.get('postcode', '')
+                        st.session_state.form_data['rua'] = addr.get('road', addr.get('street', ''))
+                        st.session_state.form_data['bairro'] = addr.get('suburb', addr.get('neighbourhood', ''))
+                        st.session_state.form_data['num'] = addr.get('house_number', '')
+                        st.session_state.form_data['cep'] = addr.get('postcode', '')
                         st.rerun()
                 except: pass
             else:
-                st.warning("Aguardando permissão de GPS do navegador...")
+                st.warning("Aguardando sinal GPS...")
 
-    # Mapa para ajuste fino (Satélite)
-    m_cad = folium.Map(
-        location=[st.session_state.lat_input, st.session_state.lon_input], 
-        zoom_start=19,
-        tiles="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
-        attr="Google Satellite"
-    )
-    folium.Marker([st.session_state.lat_input, st.session_state.lon_input], icon=folium.Icon(color="red", icon="bus", prefix="fa")).add_to(m_cad)
-    
-    map_output = st_folium(m_cad, height=350, width=None, key="mapa_cadastro")
+    # --- FRAGMENTO DO MAPA (Para não recarregar a página toda) ---
+    @st.fragment
+    def render_mapa():
+        m_cad = folium.Map(
+            location=[st.session_state.lat_input, st.session_state.lon_input], 
+            zoom_start=19,
+            tiles="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
+            attr="Google Satellite"
+        )
+        folium.Marker([st.session_state.lat_input, st.session_state.lon_input], icon=folium.Icon(color="red", icon="bus", prefix="fa")).add_to(m_cad)
+        
+        map_out = st_folium(m_cad, height=350, width=None, key="mapa_cadastro", returned_objects=["last_clicked"])
 
-    if map_output["last_clicked"]:
-        st.session_state.lat_input = map_output["last_clicked"]["lat"]
-        st.session_state.lon_input = map_output["last_clicked"]["lng"]
-        try:
-            rev = geolocator.reverse(f"{st.session_state.lat_input}, {st.session_state.lon_input}")
-            if rev:
-                addr = rev.raw.get('address', {})
-                st.session_state.rua_input = addr.get('road', addr.get('street', ''))
-                st.session_state.bairro_input = addr.get('suburb', addr.get('neighbourhood', ''))
-                st.session_state.num_input = addr.get('house_number', '')
-                st.session_state.cep_input = addr.get('postcode', '')
+        if map_out and map_out.get("last_clicked"):
+            click_lat = map_out["last_clicked"]["lat"]
+            click_lon = map_out["last_clicked"]["lng"]
+            if click_lat != st.session_state.lat_input:
+                st.session_state.lat_input = click_lat
+                st.session_state.lon_input = click_lon
+                try:
+                    rev = geolocator.reverse(f"{click_lat}, {click_lon}")
+                    if rev:
+                        addr = rev.raw.get('address', {})
+                        st.session_state.form_data['rua'] = addr.get('road', '')
+                        st.session_state.form_data['bairro'] = addr.get('suburb', '')
+                        st.session_state.form_data['num'] = addr.get('house_number', '')
+                        st.session_state.form_data['cep'] = addr.get('postcode', '')
+                except: pass
                 st.rerun()
-        except: pass
+
+    render_mapa()
 
     st.markdown("---")
     
-    # Formulário de Cadastro
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("### 📍 Informações de Endereço")
-        id_parada = st.text_input("Número/ID da Parada*", placeholder="Ex: PA-101")
-        rua = st.text_input("Rua/Avenida*", value=st.session_state.rua_input)
-        num_loc = st.text_input("Número aproximado", value=st.session_state.num_input)
-        bairro = st.text_input("Bairro*", value=st.session_state.bairro_input)
-        cep = st.text_input("CEP", value=st.session_state.cep_input)
-        ponto_ref = st.text_area("Ponto de Referência")
-        
-    with col2:
-        st.markdown("### 🏗️ Características Técnicas")
-        tipo = st.selectbox("Tipo de Mobiliário*", ["Placa", "Abrigo", "Abrigo + Placa"])
-        sentido = st.selectbox("Sentido*", ["PC1 - PC2", "PC2 - PC1"])
-        st.info(f"📍 Latitude: {st.session_state.lat_input:.7f}\n\n📍 Longitude: {st.session_state.lon_input:.7f}")
-        foto = st.file_uploader("Capturar Foto", type=['jpg', 'png', 'jpeg'])
+    # --- FORMULÁRIO ---
+    with st.form("cadastro_parada", clear_on_submit=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("#### 📍 Endereço")
+            id_p = st.text_input("ID da Parada*", value=st.session_state.form_data['id'])
+            rua_p = st.text_input("Rua*", value=st.session_state.form_data['rua'])
+            num_p = st.text_input("Número", value=st.session_state.form_data['num'])
+            bairro_p = st.text_input("Bairro*", value=st.session_state.form_data['bairro'])
+            cep_p = st.text_input("CEP", value=st.session_state.form_data['cep'])
+            ref_p = st.text_area("Ponto de Referência")
+            
+        with col2:
+            st.markdown("#### 🏗️ Técnica")
+            tipo_p = st.selectbox("Tipo*", ["Placa", "Abrigo", "Abrigo + Placa"])
+            sentido_p = st.selectbox("Sentido*", ["PC1 - PC2", "PC2 - PC1"])
+            st.write(f"📌 **Lat:** {st.session_state.lat_input:.6f}")
+            st.write(f"📌 **Lon:** {st.session_state.lon_input:.6f}")
+            foto = st.file_uploader("Foto", type=['jpg', 'jpeg', 'png'])
 
-    if st.button("💾 FINALIZAR E SALVAR REGISTRO", type="primary", use_container_width=True):
-        if not id_parada or not rua or not bairro:
-            st.error("❌ Preencha os campos obrigatórios (ID, Rua e Bairro).")
-        else:
-            try:
-                nova_parada = Parada(
-                    numero_parada=id_parada, rua=rua, numero_localizacao=num_loc,
-                    bairro=bairro, cep=cep, ponto_referencia=ponto_ref,
-                    sentido=sentido, tipo=tipo, latitude=st.session_state.lat_input,
-                    longitude=st.session_state.lon_input,
-                    foto_url=foto.name if foto else "sem_foto.jpg"
-                )
-                db.add(nova_parada)
-                db.commit()
-                st.success(f"✅ Parada {id_parada} salva com sucesso!")
-                st.balloons()
-                
-                # Reset para novo cadastro
-                for f in ['rua_input', 'bairro_input', 'num_input', 'cep_input']: st.session_state[f] = ""
-                st.rerun()
-            except Exception as e:
-                db.rollback()
-                st.error(f"Erro ao salvar: {e}")
+        submit = st.form_submit_button("💾 SALVAR REGISTRO", use_container_width=True, type="primary")
+
+        if submit:
+            if not id_p or not rua_p or not bairro_p:
+                st.error("Campos obrigatórios faltando!")
+            else:
+                try:
+                    nova = Parada(
+                        numero_parada=id_p, rua=rua_p, numero_localizacao=num_p,
+                        bairro=bairro_p, cep=cep_p, ponto_referencia=ref_p,
+                        sentido=sentido_p, tipo=tipo_p, latitude=st.session_state.lat_input,
+                        longitude=st.session_state.lon_input, foto_url=foto.name if foto else "sem_foto.jpg"
+                    )
+                    db.add(nova)
+                    db.commit()
+                    st.success("✅ Salvo!")
+                    st.balloons()
+                except Exception as e:
+                    db.rollback()
+                    st.error(f"Erro: {e}")
 
 # --- ABA 2: VISUALIZAÇÃO ---
 with tab2:
-    st.subheader("📊 Inventário Georreferenciado")
+    st.subheader("📊 Inventário")
     todas = db.query(Parada).order_by(Parada.data_cadastro.desc()).all()
     if todas:
         df = pd.DataFrame([{
-            "ID": p.numero_parada, "Bairro": p.bairro, "Rua": p.rua,
-            "Tipo": p.tipo, "Sentido": p.sentido, "LAT": float(p.latitude), "LON": float(p.longitude)
+            "ID": p.numero_parada, "Rua": p.rua, "Bairro": p.bairro,
+            "LAT": float(p.latitude), "LON": float(p.longitude)
         } for p in todas])
         
-        m_view = folium.Map(location=[df['LAT'].mean(), df['LON'].mean()], zoom_start=15)
+        m_view = folium.Map(location=[df['LAT'].mean(), df['LON'].mean()], zoom_start=14)
         for _, r in df.iterrows():
-            folium.Marker([r['LAT'], r['LON']], popup=f"Parada {r['ID']}").add_to(m_view)
+            folium.Marker([r['LAT'], r['LON']], popup=r['ID']).add_to(m_view)
         
         st_folium(m_view, height=500, width=None, key="mapa_view")
         st.dataframe(df, use_container_width=True)
-    else:
-        st.info("Ainda não há paradas cadastradas.")
-
 
 db.close()
-
