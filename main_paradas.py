@@ -499,7 +499,14 @@ with tab4:
                     st.error(f"Erro ao salvar: {e}")
 
         if excluir:
-            if st.confirm("Tem certeza que deseja excluir esta parada?"):
+            st.warning("⚠️ Esta ação é irreversível!")
+        
+            confirmar = st.checkbox(
+                "Confirmo que desejo excluir esta parada",
+                key=f"confirm_excluir_{parada.id}"
+            )
+        
+            if confirmar:
                 try:
                     db.delete(parada)
                     db.commit()
@@ -509,7 +516,9 @@ with tab4:
                     db.rollback()
                     st.error(f"Erro ao excluir: {e}")
 
+
 db.close()
+
 
 
 
