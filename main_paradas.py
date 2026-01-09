@@ -319,9 +319,23 @@ with tab3:
         )
         bairro_counts.columns = ["Bairro", "Quantidade"]
 
-        st.bar_chart(
-            bairro_counts.set_index("Bairro")
+        # -------- GRÁFICO DE PIZZA (DONUT) --------
+        import matplotlib.pyplot as plt
+
+        fig, ax = plt.subplots(figsize=(6, 6))
+
+        ax.pie(
+            bairro_counts["Quantidade"],
+            labels=bairro_counts["Bairro"],
+            autopct="%1.1f%%",
+            startangle=90,
+            wedgeprops=dict(width=0.4)  # cria efeito de borda (donut)
         )
+
+        ax.set_title("Distribuição de Paradas por Bairro")
+        ax.axis("equal")
+
+        st.pyplot(fig)
 
         st.divider()
 
@@ -356,6 +370,7 @@ with tab3:
         st.bar_chart(tipo_counts)
 
 db.close()
+
 
 
 
