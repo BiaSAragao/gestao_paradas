@@ -82,7 +82,11 @@ st.markdown(
 st.title("🚌 SIP - Sistema de Inventário de Paradas")
 st.caption("Gestão de Ativos - Feira de Santana")
 
-tab1, tab2 = st.tabs(["📝 Cadastrar Parada", "📍 Visualizar Mapa e Dados"])
+tab1, tab2, tab3 = st.tabs([
+    "📝 Cadastrar Parada",
+    "📍 Visualizar Mapa e Dados",
+    "📊 Dashboard e Quantitativos"
+])
 
 # ================== SESSION STATE ==================
 if "lat_input" not in st.session_state:
@@ -356,5 +360,6 @@ with tab3:
         st.bar_chart(tipo_counts)
 
 db.close()
+
 
 
