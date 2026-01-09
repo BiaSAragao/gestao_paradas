@@ -74,6 +74,9 @@ st.set_page_config(
     page_icon="🚌"
 )
 
+if "msg_sucesso" not in st.session_state:
+    st.session_state.msg_sucesso = None
+
 st.markdown(
     "<style>#MainMenu{visibility:hidden;} footer{visibility:hidden;}</style>",
     unsafe_allow_html=True
@@ -379,6 +382,11 @@ with tab3:
 with tab4:
     st.subheader("✏️ Editar ou Excluir Parada")
 
+    if st.session_state.msg_sucesso:
+        st.success(st.session_state.msg_sucesso)
+        st.session_state.msg_sucesso = None
+
+
     todas = carregar_paradas()
 
     if not todas:
@@ -474,9 +482,10 @@ with tab4:
                             parada.foto_url = foto_nova.name
 
                         db.commit()
+                        st.session_state.msg_sucesso = "✅ Parada atualizada com sucesso!"
                         st.cache_data.clear()
-                        st.success("✅ Parada atualizada com sucesso!")
                         st.rerun()
+
                     except Exception as e:
                         db.rollback()
                         st.error(f"Erro ao atualizar: {e}")
@@ -496,14 +505,16 @@ with tab4:
                 try:
                     db.delete(parada)
                     db.commit()
+                    st.session_state.msg_sucesso = "🗑️ Parada excluída com sucesso!"
                     st.cache_data.clear()
-                    st.success("🗑️ Parada excluída com sucesso!")
                     st.rerun()
+
                 except Exception as e:
                     db.rollback()
                     st.error(f"Erro ao excluir: {e}")
 
 db.close()
+
 
 
 
