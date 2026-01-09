@@ -291,8 +291,6 @@ with tab3:
     if not todas:
         st.info("Nenhuma parada cadastrada ainda.")
     else:
-        import plotly.express as px
-
         df = pd.DataFrame([{
             "Rua": normalizar_texto(p.rua),
             "Bairro": normalizar_texto(p.bairro),
@@ -307,7 +305,7 @@ with tab3:
 
         st.divider()
 
-        # ================= PARADAS POR BAIRRO =================
+        # ================= PARADAS POR BAIRRO (DONUT) =================
         st.markdown("### 📍 Paradas por Bairro")
 
         bairro_counts = (
@@ -317,21 +315,20 @@ with tab3:
         )
         bairro_counts.columns = ["Bairro", "Quantidade"]
 
-        fig_bairro = px.pie(
-            bairro_counts,
-            names="Bairro",
-            values="Quantidade",
-            hole=0.45,  # donut / borda
-            title="Distribuição de Paradas por Bairro"
-        )
+        donut_spec = {
+            "data": {"values": bairro_counts.to_dict(orient="records")},
+            "mark": {"type": "arc", "innerRadius": 70},
+            "encoding": {
+                "theta": {"field": "Quantidade", "type": "quantitative"},
+                "color": {"field": "Bairro", "type": "nominal"},
+                "tooltip": [
+                    {"field": "Bairro", "type": "nominal"},
+                    {"field": "Quantidade", "type": "quantitative"}
+                ]
+            }
+        }
 
-        fig_bairro.update_traces(textposition="inside", textinfo="percent+label")
-        fig_bairro.update_layout(
-            showlegend=True,
-            height=450
-        )
-
-        st.plotly_chart(fig_bairro, use_container_width=True)
+        st.vega_lite_chart(donut_spec, use_container_width=True)
 
         st.divider()
 
@@ -364,23 +361,12 @@ with tab3:
         )
         tipo_counts.columns = ["Tipo", "Quantidade"]
 
-        fig_tipo = px.bar(
-            tipo_counts,
-            x="Tipo",
-            y="Quantidade",
-            text="Quantidade",
-            title="Quantidade de Paradas por Tipo"
+        st.bar_chart(
+            tipo_counts.set_index("Tipo")
         )
-
-        fig_tipo.update_layout(
-            xaxis_title="Tipo de Parada",
-            yaxis_title="Quantidade",
-            height=400
-        )
-
-        st.plotly_chart(fig_tipo, use_container_width=True)
 
 db.close()
+
 
 
 
