@@ -291,6 +291,8 @@ with tab3:
     if not todas:
         st.info("Nenhuma parada cadastrada ainda.")
     else:
+        import plotly.express as px
+
         df = pd.DataFrame([{
             "Rua": normalizar_texto(p.rua),
             "Bairro": normalizar_texto(p.bairro),
@@ -298,14 +300,10 @@ with tab3:
         } for p in todas])
 
         # ================= INDICADORES =================
-        total_paradas = len(df)
-        total_bairros = df["Bairro"].nunique()
-        total_ruas = df["Rua"].nunique()
-
         c1, c2, c3 = st.columns(3)
-        c1.metric("🚌 Total de Paradas", total_paradas)
-        c2.metric("🏘️ Bairros Atendidos", total_bairros)
-        c3.metric("🛣️ Ruas / Avenidas", total_ruas)
+        c1.metric("🚌 Total de Paradas", len(df))
+        c2.metric("🏘️ Bairros Atendidos", df["Bairro"].nunique())
+        c3.metric("🛣️ Ruas / Avenidas", df["Rua"].nunique())
 
         st.divider()
 
@@ -319,23 +317,21 @@ with tab3:
         )
         bairro_counts.columns = ["Bairro", "Quantidade"]
 
-        # -------- GRÁFICO DE PIZZA (DONUT) --------
-        import matplotlib.pyplot as plt
-
-        fig, ax = plt.subplots(figsize=(6, 6))
-
-        ax.pie(
-            bairro_counts["Quantidade"],
-            labels=bairro_counts["Bairro"],
-            autopct="%1.1f%%",
-            startangle=90,
-            wedgeprops=dict(width=0.4)  # cria efeito de borda (donut)
+        fig_bairro = px.pie(
+            bairro_counts,
+            names="Bairro",
+            values="Quantidade",
+            hole=0.45,  # donut / borda
+            title="Distribuição de Paradas por Bairro"
         )
 
-        ax.set_title("Distribuição de Paradas por Bairro")
-        ax.axis("equal")
+        fig_bairro.update_traces(textposition="inside", textinfo="percent+label")
+        fig_bairro.update_layout(
+            showlegend=True,
+            height=450
+        )
 
-        st.pyplot(fig)
+        st.plotly_chart(fig_bairro, use_container_width=True)
 
         st.divider()
 
@@ -353,7 +349,7 @@ with tab3:
         max_qtd = top_ruas["Quantidade"].max()
 
         for i, row in top_ruas.iterrows():
-            st.markdown(f"**{i+1}º — {row['Rua/Avenida']}**")
+            st.markdown(f"**{i+1}º — {row['Rua/Avenida']}** ({row['Quantidade']})")
             st.progress(row["Quantidade"] / max_qtd)
 
         st.divider()
@@ -364,12 +360,28 @@ with tab3:
         tipo_counts = (
             df["Tipo"]
             .value_counts()
-            .sort_values(ascending=False)
+            .reset_index()
+        )
+        tipo_counts.columns = ["Tipo", "Quantidade"]
+
+        fig_tipo = px.bar(
+            tipo_counts,
+            x="Tipo",
+            y="Quantidade",
+            text="Quantidade",
+            title="Quantidade de Paradas por Tipo"
         )
 
-        st.bar_chart(tipo_counts)
+        fig_tipo.update_layout(
+            xaxis_title="Tipo de Parada",
+            yaxis_title="Quantidade",
+            height=400
+        )
+
+        st.plotly_chart(fig_tipo, use_container_width=True)
 
 db.close()
+
 
 
 
