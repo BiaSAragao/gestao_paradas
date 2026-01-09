@@ -12,6 +12,26 @@ from streamlit_folium import st_folium
 from geopy.geocoders import Nominatim
 from streamlit_js_eval import streamlit_js_eval
 
+# ================== FUNÇÕES AUXILIARES ==================
+def normalizar_texto(txt):
+    if not txt:
+        return ""
+    return txt.strip().title()
+
+def extrair_endereco(addr):
+    return {
+        "rua": addr.get("road")
+               or addr.get("street")
+               or addr.get("pedestrian")
+               or "",
+        "num": addr.get("house_number", ""),
+        "bairro": addr.get("suburb")
+                  or addr.get("neighbourhood")
+                  or addr.get("quarter")
+                  or "",
+        "cep": addr.get("postcode", "")
+    }
+
 # ================== CONFIG BANCO ==================
 DATABASE_URL = st.secrets.get("DATABASE_URL") or os.getenv("DATABASE_URL")
 
@@ -43,9 +63,9 @@ class Parada(Base):
     data_cadastro = Column(DateTime, default=datetime.now)
 
 Base.metadata.create_all(bind=engine)
-
 db = SessionLocal()
-geolocator = Nominatim(user_agent="sipo_semob_fsa_v5")
+
+geolocator = Nominatim(user_agent="sipo_semob_fsa_v6")
 
 # ================== STREAMLIT ==================
 st.set_page_config(
@@ -80,7 +100,6 @@ if "form_data" not in st.session_state:
 with tab1:
     st.subheader("🗺️ Localização e GPS")
 
-    # ---------- GPS FUNCIONAL ----------
     loc_data = streamlit_js_eval(
         js_expressions="""
         new Promise((resolve) => {
@@ -104,7 +123,6 @@ with tab1:
         else:
             st.warning("Permita o acesso à localização no navegador.")
 
-    # ---------- MAPA CADASTRO ----------
     @st.fragment
     def render_mapa_cadastro():
         m = folium.Map(
@@ -121,7 +139,8 @@ with tab1:
 
         out = st_folium(
             m,
-            height=350,
+            height=420,
+            use_container_width=True,
             key="mapa_cadastro",
             returned_objects=["last_clicked"]
         )
@@ -136,11 +155,11 @@ with tab1:
                 try:
                     rev = geolocator.reverse(f"{lat}, {lon}", timeout=5)
                     if rev:
-                        addr = rev.raw.get("address", {})
-                        st.session_state.form_data["rua"] = addr.get("road", "")
-                        st.session_state.form_data["bairro"] = addr.get("suburb", "")
-                        st.session_state.form_data["num"] = addr.get("house_number", "")
-                        st.session_state.form_data["cep"] = addr.get("postcode", "")
+                        dados = extrair_endereco(rev.raw.get("address", {}))
+                        st.session_state.form_data["rua"] = normalizar_texto(dados["rua"])
+                        st.session_state.form_data["bairro"] = normalizar_texto(dados["bairro"])
+                        st.session_state.form_data["num"] = dados["num"]
+                        st.session_state.form_data["cep"] = dados["cep"]
                 except:
                     pass
                 st.rerun()
@@ -148,7 +167,6 @@ with tab1:
     render_mapa_cadastro()
     st.divider()
 
-    # ---------- FORMULÁRIO ----------
     with st.form("cadastro_parada", clear_on_submit=True):
         col1, col2 = st.columns(2)
 
@@ -177,12 +195,12 @@ with tab1:
             else:
                 try:
                     nova = Parada(
-                        numero_parada=id_p,
-                        rua=rua_p,
-                        numero_localizacao=num_p,
-                        bairro=bairro_p,
-                        cep=cep_p,
-                        ponto_referencia=ref_p,
+                        numero_parada=id_p.strip(),
+                        rua=normalizar_texto(rua_p),
+                        numero_localizacao=num_p.strip(),
+                        bairro=normalizar_texto(bairro_p),
+                        cep=cep_p.strip(),
+                        ponto_referencia=ref_p.strip(),
                         sentido=sentido_p,
                         tipo=tipo_p,
                         latitude=st.session_state.lat_input,
@@ -212,32 +230,32 @@ with tab2:
     if todas:
         df = pd.DataFrame([{
             "ID": p.numero_parada,
-            "Rua": p.rua,
-            "Bairro": p.bairro,
+            "Rua": normalizar_texto(p.rua),
+            "Bairro": normalizar_texto(p.bairro),
             "LAT": float(p.latitude),
             "LON": float(p.longitude)
         } for p in todas])
 
-        # -------- FILTROS --------
         st.markdown("### 🔎 Filtros")
         c1, c2 = st.columns(2)
 
         with c1:
             filtro_bairro = st.multiselect(
                 "Bairro",
-                sorted(df["Bairro"].unique())
+                sorted(df["Bairro"].dropna().unique())
             )
 
         with c2:
             filtro_rua = st.text_input("Rua contém")
 
         df_f = df.copy()
+
         if filtro_bairro:
             df_f = df_f[df_f["Bairro"].isin(filtro_bairro)]
-        if filtro_rua:
-            df_f = df_f[df_f["Rua"].str.contains(filtro_rua, case=False)]
 
-        # -------- MAPA VISUALIZAÇÃO --------
+        if filtro_rua:
+            df_f = df_f[df_f["Rua"].str.contains(filtro_rua, case=False, na=False)]
+
         @st.fragment
         def render_mapa_view(df_map):
             m = folium.Map(
@@ -250,7 +268,7 @@ with tab2:
                     popup=f"Parada {r['ID']}"
                 ).add_to(m)
 
-            st_folium(m, height=500, key="mapa_view")
+            st_folium(m, height=550, use_container_width=True, key="mapa_view")
 
         render_mapa_view(df_f)
         st.dataframe(df_f, use_container_width=True)
