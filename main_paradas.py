@@ -276,5 +276,85 @@ with tab2:
     else:
         st.info("Nenhuma parada cadastrada.")
 
+# ==================================================
+# ================= ABA 3 - DASHBOARD ===============
+# ==================================================
+with tab3:
+    st.subheader("📊 Dashboard e Quantitativos")
+
+    todas = carregar_paradas()
+
+    if not todas:
+        st.info("Nenhuma parada cadastrada ainda.")
+    else:
+        df = pd.DataFrame([{
+            "Rua": normalizar_texto(p.rua),
+            "Bairro": normalizar_texto(p.bairro),
+            "Tipo": p.tipo
+        } for p in todas])
+
+        # ---------- INDICADORES ----------
+        total_paradas = len(df)
+        total_bairros = df["Bairro"].nunique()
+        total_ruas = df["Rua"].nunique()
+
+        c1, c2, c3 = st.columns(3)
+
+        c1.metric("🚌 Total de Paradas", total_paradas)
+        c2.metric("🏘️ Bairros Atendidos", total_bairros)
+        c3.metric("🛣️ Ruas/Avenidas", total_ruas)
+
+        st.divider()
+
+        # ---------- PARADAS POR BAIRRO ----------
+        st.markdown("### 📍 Paradas por Bairro")
+
+        bairro_counts = (
+            df["Bairro"]
+            .value_counts()
+            .reset_index()
+            .rename(columns={"index": "Bairro", "Bairro": "Quantidade"})
+        )
+
+        st.plotly_chart(
+            {
+                "data": [{
+                    "type": "pie",
+                    "labels": bairro_counts["Bairro"],
+                    "values": bairro_counts["Quantidade"],
+                    "hole": 0.4
+                }],
+                "layout": {
+                    "height": 400,
+                    "margin": dict(t=30, b=30)
+                }
+            },
+            use_container_width=True
+        )
+
+        st.divider()
+
+        # ---------- TOP 10 RUAS ----------
+        st.markdown("### 🏆 Top 10 Ruas/Avenidas com Mais Paradas")
+
+        top_ruas = (
+            df["Rua"]
+            .value_counts()
+            .head(10)
+            .sort_values()
+        )
+
+        st.bar_chart(top_ruas)
+
+        st.divider()
+
+        # ---------- TIPO DE PARADA ----------
+        st.markdown("### 🏗️ Tipologia das Paradas")
+
+        tipo_counts = df["Tipo"].value_counts()
+
+        st.bar_chart(tipo_counts)
+
 db.close()
+
 
