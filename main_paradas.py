@@ -317,26 +317,9 @@ with tab3:
             df["Bairro"]
             .value_counts()
             .reset_index()
-            .rename(columns={"index": "Bairro", "Bairro": "Quantidade"})
         )
-
-        st.plotly_chart(
-            {
-                "data": [{
-                    "type": "pie",
-                    "labels": bairro_counts["Bairro"],
-                    "values": bairro_counts["Quantidade"],
-                    "hole": 0.4
-                }],
-                "layout": {
-                    "height": 400,
-                    "margin": dict(t=30, b=30)
-                }
-            },
-            use_container_width=True
-        )
-
-        st.divider()
+        
+        bairro_counts.columns = ["Bairro", "Quantidade"]
 
         # ---------- TOP 10 RUAS ----------
         st.markdown("### 🏆 Top 10 Ruas/Avenidas com Mais Paradas")
@@ -360,6 +343,7 @@ with tab3:
         st.bar_chart(tipo_counts)
 
 db.close()
+
 
 
 
