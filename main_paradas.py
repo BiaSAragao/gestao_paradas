@@ -374,38 +374,31 @@ with tab3:
         )
 
 # ==================================================
-# ============ ABA 4 - EDITAR / EXCLUIR =============
+# ================= ABA 4 - EDITAR / EXCLUIR ========
 # ==================================================
 with tab4:
     st.subheader("✏️ Editar ou Excluir Parada")
 
-    paradas = db.query(Parada).order_by(Parada.id.desc()).all()
+    todas = carregar_paradas()
 
-    if not paradas:
+    if not todas:
         st.info("Nenhuma parada cadastrada.")
     else:
-        # ---------- SELEÇÃO ----------
-        opcoes = {
-            f"ID {p.id} | {p.rua} - {p.bairro}": p.id
-            for p in paradas
-        }
+        df_sel = pd.DataFrame([{
+            "ID_DB": p.id,
+            "ID Parada": p.numero_parada or "Sem identificação",
+            "Rua": p.rua,
+            "Bairro": p.bairro
+        } for p in todas])
 
-        selecionada = st.selectbox(
+        escolha = st.selectbox(
             "Selecione a parada",
-            list(opcoes.keys())
+            df_sel.index,
+            format_func=lambda i: f"{df_sel.loc[i,'ID Parada']} — {df_sel.loc[i,'Rua']} ({df_sel.loc[i,'Bairro']})"
         )
 
-        parada_id = opcoes[selecionada]
-        parada = db.query(Parada).get(parada_id)
-
-        st.divider()
-
-        # ---------- FOTO ATUAL ----------
-        if parada.foto_url and parada.foto_url != "sem_foto.jpg":
-            st.markdown("### 📸 Foto Atual")
-            st.image(parada.foto_url, use_container_width=True)
-        else:
-            st.info("📷 Esta parada ainda não possui foto.")
+        parada_id = int(df_sel.loc[escolha, "ID_DB"])
+        parada = db.get(Parada, parada_id)
 
         st.divider()
 
@@ -415,45 +408,29 @@ with tab4:
 
             with col1:
                 st.markdown("#### 📍 Endereço")
-
                 id_p = st.text_input(
                     "Número da Parada (opcional)",
                     parada.numero_parada or ""
                 )
-
                 rua_p = st.text_input("Rua*", parada.rua)
-
                 num_p = st.text_input(
                     "Número (opcional)",
                     parada.numero_localizacao or ""
                 )
-
                 bairro_p = st.text_input("Bairro*", parada.bairro)
-
-                cep_p = st.text_input(
-                    "CEP (opcional)",
-                    parada.cep or ""
-                )
-
+                cep_p = st.text_input("CEP (opcional)", parada.cep or "")
                 ref_p = st.text_area(
                     "Ponto de Referência*",
-                    parada.ponto_referencia
+                    parada.ponto_referencia or ""
                 )
 
             with col2:
                 st.markdown("#### 🏗️ Técnica")
-
                 tipo_p = st.selectbox(
                     "Tipo*",
                     ["Placa", "Abrigo", "Abrigo + Placa", "Sem Identificação"],
-                    index=[
-                        "Placa",
-                        "Abrigo",
-                        "Abrigo + Placa",
-                        "Sem Identificação"
-                    ].index(parada.tipo)
+                    index=["Placa", "Abrigo", "Abrigo + Placa", "Sem Identificação"].index(parada.tipo)
                 )
-
                 sentido_p = st.selectbox(
                     "Sentido*",
                     ["PC1 - PC2", "PC2 - PC1"],
@@ -463,8 +440,12 @@ with tab4:
                 st.write(f"📌 Lat: {float(parada.latitude):.6f}")
                 st.write(f"📌 Lon: {float(parada.longitude):.6f}")
 
+                st.markdown("#### 📷 Foto")
+                if parada.foto_url:
+                    st.caption(f"Arquivo atual: {parada.foto_url}")
+
                 foto_nova = st.file_uploader(
-                    "Adicionar / Trocar foto (opcional)",
+                    "Adicionar / Alterar foto",
                     type=["jpg", "jpeg", "png"]
                 )
 
@@ -474,51 +455,48 @@ with tab4:
                 use_container_width=True
             )
 
-        # ---------- AÇÃO: SALVAR ----------
-        if salvar:
-            if not rua_p or not bairro_p or not ref_p:
-                st.error("⚠️ Preencha todos os campos obrigatórios.")
-            else:
-                try:
-                    parada.numero_parada = id_p if id_p.strip() else None
-                    parada.rua = rua_p
-                    parada.numero_localizacao = num_p if num_p.strip() else None
-                    parada.bairro = bairro_p
-                    parada.cep = cep_p if cep_p.strip() else None
-                    parada.ponto_referencia = ref_p
-                    parada.tipo = tipo_p
-                    parada.sentido = sentido_p
+            if salvar:
+                if not rua_p or not bairro_p or not ref_p:
+                    st.error("⚠️ Preencha todos os campos obrigatórios.")
+                else:
+                    try:
+                        parada.numero_parada = id_p.strip() if id_p.strip() else None
+                        parada.rua = rua_p.strip()
+                        parada.numero_localizacao = num_p.strip() if num_p.strip() else None
+                        parada.bairro = bairro_p.strip()
+                        parada.cep = cep_p.strip() if cep_p.strip() else None
+                        parada.ponto_referencia = ref_p.strip()
+                        parada.tipo = tipo_p
+                        parada.sentido = sentido_p
 
-                    if foto_nova:
-                        parada.foto_url = foto_nova.name
+                        # Salva apenas o caminho/nome (ideal p/ outro banco ou storage)
+                        if foto_nova:
+                            parada.foto_url = foto_nova.name
 
-                    db.commit()
-                    st.success("✅ Parada atualizada com sucesso!")
-                    st.rerun()
-                except Exception as e:
-                    db.rollback()
-                    st.error(f"Erro ao salvar: {e}")
+                        db.commit()
+                        st.cache_data.clear()
+                        st.success("✅ Parada atualizada com sucesso!")
+                        st.rerun()
+                    except Exception as e:
+                        db.rollback()
+                        st.error(f"Erro ao atualizar: {e}")
+
+        st.divider()
 
         # ---------- EXCLUSÃO ----------
-        st.divider()
         st.markdown("### 🗑️ Excluir Parada")
+        st.warning("⚠️ Esta ação não pode ser desfeita.")
 
-        st.warning("⚠️ Esta ação é irreversível!")
+        confirmar = st.checkbox("Confirmo que desejo excluir esta parada")
 
-        confirmar = st.checkbox(
-            "Confirmo que desejo excluir esta parada",
-            key=f"confirm_excluir_{parada.id}"
-        )
-
-        if confirmar:
-            if st.button(
-                "🗑️ EXCLUIR DEFINITIVAMENTE",
-                type="primary",
-                use_container_width=True
-            ):
+        if st.button("❌ EXCLUIR PARADA", use_container_width=True):
+            if not confirmar:
+                st.error("Marque a confirmação para excluir.")
+            else:
                 try:
                     db.delete(parada)
                     db.commit()
+                    st.cache_data.clear()
                     st.success("🗑️ Parada excluída com sucesso!")
                     st.rerun()
                 except Exception as e:
@@ -526,6 +504,7 @@ with tab4:
                     st.error(f"Erro ao excluir: {e}")
 
 db.close()
+
 
 
 
