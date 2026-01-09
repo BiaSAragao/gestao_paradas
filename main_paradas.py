@@ -371,7 +371,144 @@ with tab3:
             tipo_counts.set_index("Tipo")
         )
 
+# ==================================================
+# ============ ABA 4 - EDITAR / EXCLUIR =============
+# ==================================================
+with tab4:
+    st.subheader("✏️ Editar ou Excluir Parada")
+
+    paradas = db.query(Parada).order_by(Parada.id.desc()).all()
+
+    if not paradas:
+        st.info("Nenhuma parada cadastrada.")
+    else:
+        # ---------- SELEÇÃO ----------
+        opcoes = {
+            f"ID {p.id} | {p.rua} - {p.bairro}": p.id
+            for p in paradas
+        }
+
+        selecionada = st.selectbox(
+            "Selecione a parada",
+            list(opcoes.keys())
+        )
+
+        parada_id = opcoes[selecionada]
+        parada = db.query(Parada).get(parada_id)
+
+        st.divider()
+
+        # ---------- FOTO ATUAL ----------
+        if parada.foto_url and parada.foto_url != "sem_foto.jpg":
+            st.markdown("### 📸 Foto Atual")
+            st.image(parada.foto_url, use_container_width=True)
+        else:
+            st.info("📷 Esta parada ainda não possui foto.")
+
+        st.divider()
+
+        # ---------- FORMULÁRIO ----------
+        with st.form("editar_parada"):
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("#### 📍 Endereço")
+
+                id_p = st.text_input(
+                    "Número da Parada (opcional)",
+                    parada.numero_parada or ""
+                )
+
+                rua_p = st.text_input("Rua*", parada.rua)
+                num_p = st.text_input(
+                    "Número (opcional)",
+                    parada.numero_localizacao or ""
+                )
+                bairro_p = st.text_input("Bairro*", parada.bairro)
+                cep_p = st.text_input("CEP (opcional)", parada.cep or "")
+                ref_p = st.text_area(
+                    "Ponto de Referência*",
+                    parada.ponto_referencia
+                )
+
+            with col2:
+                st.markdown("#### 🏗️ Técnica")
+
+                tipo_p = st.selectbox(
+                    "Tipo*",
+                    ["Placa", "Abrigo", "Abrigo + Placa", "Sem Identificação"],
+                    index=[
+                        "Placa",
+                        "Abrigo",
+                        "Abrigo + Placa",
+                        "Sem Identificação"
+                    ].index(parada.tipo)
+                )
+
+                sentido_p = st.selectbox(
+                    "Sentido*",
+                    ["PC1 - PC2", "PC2 - PC1"],
+                    index=["PC1 - PC2", "PC2 - PC1"].index(parada.sentido)
+                )
+
+                st.write(f"📌 Lat: {float(parada.latitude):.6f}")
+                st.write(f"📌 Lon: {float(parada.longitude):.6f}")
+
+                foto_nova = st.file_uploader(
+                    "Adicionar / Trocar foto (opcional)",
+                    type=["jpg", "jpeg", "png"]
+                )
+
+            col_btn1, col_btn2 = st.columns(2)
+            salvar = col_btn1.form_submit_button(
+                "💾 SALVAR ALTERAÇÕES",
+                type="primary",
+                use_container_width=True
+            )
+            excluir = col_btn2.form_submit_button(
+                "🗑️ EXCLUIR PARADA",
+                use_container_width=True
+            )
+
+        # ---------- AÇÕES ----------
+        if salvar:
+            if not rua_p or not bairro_p or not ref_p:
+                st.error("⚠️ Preencha todos os campos obrigatórios.")
+            else:
+                try:
+                    parada.numero_parada = id_p if id_p.strip() else None
+                    parada.rua = rua_p
+                    parada.numero_localizacao = num_p if num_p.strip() else None
+                    parada.bairro = bairro_p
+                    parada.cep = cep_p if cep_p.strip() else None
+                    parada.ponto_referencia = ref_p
+                    parada.tipo = tipo_p
+                    parada.sentido = sentido_p
+
+                    # ---- FOTO ----
+                    if foto_nova:
+                        parada.foto_url = foto_nova.name
+
+                    db.commit()
+                    st.success("✅ Parada atualizada com sucesso!")
+                    st.rerun()
+                except Exception as e:
+                    db.rollback()
+                    st.error(f"Erro ao salvar: {e}")
+
+        if excluir:
+            if st.confirm("Tem certeza que deseja excluir esta parada?"):
+                try:
+                    db.delete(parada)
+                    db.commit()
+                    st.success("🗑️ Parada excluída com sucesso!")
+                    st.rerun()
+                except Exception as e:
+                    db.rollback()
+                    st.error(f"Erro ao excluir: {e}")
+
 db.close()
+
 
 
 
