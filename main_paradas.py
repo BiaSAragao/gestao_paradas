@@ -82,11 +82,13 @@ st.markdown(
 st.title("🚌 SIP - Sistema de Inventário de Paradas")
 st.caption("Gestão de Ativos - Feira de Santana")
 
-tab1, tab2, tab3 = st.tabs([
+tab1, tab2, tab3, tab4 = st.tabs([
     "📝 Cadastrar Parada",
     "📍 Visualizar Mapa e Dados",
-    "📊 Dashboard e Quantitativos"
+    "📊 Dashboard",
+    "✏️ Editar / Excluir"
 ])
+
 
 # ================== SESSION STATE ==================
 if "lat_input" not in st.session_state:
@@ -508,6 +510,7 @@ with tab4:
                     st.error(f"Erro ao excluir: {e}")
 
 db.close()
+
 
 
 
