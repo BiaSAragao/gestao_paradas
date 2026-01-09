@@ -49,12 +49,12 @@ Base = declarative_base()
 class Parada(Base):
     __tablename__ = "paradas"
     id = Column(Integer, primary_key=True)
-    numero_parada = Column(String(50), unique=True)
+    numero_parada = Column(String(50), unique=True, nullable=True)
     rua = Column(String(255), nullable=False)
     numero_localizacao = Column(String(20))
     bairro = Column(String(100), nullable=False)
     cep = Column(String(10))
-    ponto_referencia = Column(Text)
+    ponto_referencia = Column(Text, nullable=False)
     sentido = Column(String(20))
     tipo = Column(String(50))
     latitude = Column(Numeric(10, 8))
@@ -176,16 +176,20 @@ with tab1:
 
         with col1:
             st.markdown("#### 📍 Endereço")
-            id_p = st.text_input("Número da Parada*", st.session_state.form_data["id"])
+            id_p = st.text_input("Número da Parada (opcional)", st.session_state.form_data["id"])
             rua_p = st.text_input("Rua*", st.session_state.form_data["rua"])
-            num_p = st.text_input("Número", st.session_state.form_data["num"])
+            num_p = st.text_input("Número (opcional)", st.session_state.form_data["num"])
             bairro_p = st.text_input("Bairro*", st.session_state.form_data["bairro"])
-            cep_p = st.text_input("CEP", st.session_state.form_data["cep"])
-            ref_p = st.text_area("Ponto de Referência")
+            cep_p = st.text_input("CEP (opcional)", st.session_state.form_data["cep"])
+            ref_p = st.text_area("Ponto de Referência*")
 
         with col2:
             st.markdown("#### 🏗️ Técnica")
-            tipo_p = st.selectbox("Tipo*", ["Placa", "Abrigo", "Abrigo + Placa"])
+            tipo_p = st.selectbox(
+                "Tipo*",
+                ["Placa", "Abrigo", "Abrigo + Placa", "Sem Identificação"]
+            )
+
             sentido_p = st.selectbox("Sentido*", ["PC1 - PC2", "PC2 - PC1"])
             st.write(f"📌 Lat: {st.session_state.lat_input:.6f}")
             st.write(f"📌 Lon: {st.session_state.lon_input:.6f}")
@@ -194,23 +198,25 @@ with tab1:
         submit = st.form_submit_button("💾 SALVAR REGISTRO", type="primary", use_container_width=True)
 
         if submit:
-            if not id_p or not rua_p or not bairro_p:
+            if not rua_p or not bairro_p or not ref_p or not tipo_p or not sentido_p:
                 st.error("⚠️ Campos obrigatórios não preenchidos.")
             else:
                 try:
                     nova = Parada(
-                        numero_parada=id_p.strip(),
-                        rua=normalizar_texto(rua_p),
-                        numero_localizacao=num_p.strip(),
-                        bairro=normalizar_texto(bairro_p),
-                        cep=cep_p.strip(),
-                        ponto_referencia=ref_p.strip(),
+                        numero_parada=id_p if id_p.strip() else None,
+                        rua=rua_p,
+                        numero_localizacao=num_p if num_p.strip() else None,
+                        bairro=bairro_p,
+                        cep=cep_p if cep_p.strip() else None,
+                        ponto_referencia=ref_p,
                         sentido=sentido_p,
                         tipo=tipo_p,
                         latitude=st.session_state.lat_input,
                         longitude=st.session_state.lon_input,
                         foto_url=foto.name if foto else "sem_foto.jpg"
                     )
+
+
                     db.add(nova)
                     db.commit()
                     st.success("✅ Parada cadastrada com sucesso!")
@@ -366,6 +372,7 @@ with tab3:
         )
 
 db.close()
+
 
 
 
