@@ -172,7 +172,7 @@ with tab1:
 
         with col1:
             st.markdown("#### 📍 Endereço")
-            id_p = st.text_input("ID da Parada*", st.session_state.form_data["id"])
+            id_p = st.text_input("Número da Parada*", st.session_state.form_data["id"])
             rua_p = st.text_input("Rua*", st.session_state.form_data["rua"])
             num_p = st.text_input("Número", st.session_state.form_data["num"])
             bairro_p = st.text_input("Bairro*", st.session_state.form_data["bairro"])
@@ -246,7 +246,7 @@ with tab2:
             )
 
         with c2:
-            filtro_rua = st.text_input("Rua contém")
+            filtro_rua = st.text_input("Rua")
 
         df_f = df.copy()
 
@@ -277,3 +277,4 @@ with tab2:
         st.info("Nenhuma parada cadastrada.")
 
 db.close()
+
