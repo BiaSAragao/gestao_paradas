@@ -11,16 +11,25 @@ from geopy.geocoders import Nominatim
 from streamlit_js_eval import streamlit_js_eval
 
 # --- CONFIGURAÇÃO DO BANCO DE DADOS ---
-# Lê a URL da variável de ambiente (Terminal ou Streamlit Cloud Secrets)
-DATABASE_URL = os.getenv("DATABASE_URL")
+# Tenta pegar primeiro do Streamlit Secrets, depois do Ambiente (terminal)
+DATABASE_URL = st.secrets.get("DATABASE_URL") or os.getenv("DATABASE_URL")
 
 if not DATABASE_URL:
-    st.error("⚠️ Erro: Variável 'DATABASE_URL' não encontrada. Defina-a no terminal ou nos Secrets do Cloud.")
+    st.error("⚠️ Erro: A URL do banco de dados não foi configurada nos Secrets.")
     st.stop()
 
-# Ajuste de compatibilidade para o prefixo do Postgres
+# Garante que o link comece com postgresql:// (obrigatório para SQLAlchemy)
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+try:
+    engine = create_engine(DATABASE_URL, echo=False, future=True)
+    # Tenta conectar rápido para ver se a URL é válida
+    with engine.connect() as conn:
+        pass
+except Exception as e:
+    st.error(f"❌ Erro de Conexão: A URL fornecida é inválida ou o banco recusou a conexão.")
+    st.stop()
 
 engine = create_engine(DATABASE_URL, echo=False, future=True)
 SessionLocal = scoped_session(sessionmaker(bind=engine, autoflush=False, autocommit=False))
@@ -174,5 +183,6 @@ with tab2:
         st.dataframe(df, use_container_width=True)
     else:
         st.info("Ainda não há paradas cadastradas.")
+
 
 db.close()
