@@ -409,7 +409,7 @@ with tab4:
 
         st.divider()
 
-        # ---------- FORMULÁRIO ----------
+        # ---------- FORMULÁRIO DE EDIÇÃO ----------
         with st.form("editar_parada"):
             col1, col2 = st.columns(2)
 
@@ -422,12 +422,19 @@ with tab4:
                 )
 
                 rua_p = st.text_input("Rua*", parada.rua)
+
                 num_p = st.text_input(
                     "Número (opcional)",
                     parada.numero_localizacao or ""
                 )
+
                 bairro_p = st.text_input("Bairro*", parada.bairro)
-                cep_p = st.text_input("CEP (opcional)", parada.cep or "")
+
+                cep_p = st.text_input(
+                    "CEP (opcional)",
+                    parada.cep or ""
+                )
+
                 ref_p = st.text_area(
                     "Ponto de Referência*",
                     parada.ponto_referencia
@@ -461,18 +468,13 @@ with tab4:
                     type=["jpg", "jpeg", "png"]
                 )
 
-            col_btn1, col_btn2 = st.columns(2)
-            salvar = col_btn1.form_submit_button(
+            salvar = st.form_submit_button(
                 "💾 SALVAR ALTERAÇÕES",
                 type="primary",
                 use_container_width=True
             )
-            excluir = col_btn2.form_submit_button(
-                "🗑️ EXCLUIR PARADA",
-                use_container_width=True
-            )
 
-        # ---------- AÇÕES ----------
+        # ---------- AÇÃO: SALVAR ----------
         if salvar:
             if not rua_p or not bairro_p or not ref_p:
                 st.error("⚠️ Preencha todos os campos obrigatórios.")
@@ -487,7 +489,6 @@ with tab4:
                     parada.tipo = tipo_p
                     parada.sentido = sentido_p
 
-                    # ---- FOTO ----
                     if foto_nova:
                         parada.foto_url = foto_nova.name
 
@@ -498,15 +499,23 @@ with tab4:
                     db.rollback()
                     st.error(f"Erro ao salvar: {e}")
 
-        if excluir:
-            st.warning("⚠️ Esta ação é irreversível!")
-        
-            confirmar = st.checkbox(
-                "Confirmo que desejo excluir esta parada",
-                key=f"confirm_excluir_{parada.id}"
-            )
-        
-            if confirmar:
+        # ---------- EXCLUSÃO ----------
+        st.divider()
+        st.markdown("### 🗑️ Excluir Parada")
+
+        st.warning("⚠️ Esta ação é irreversível!")
+
+        confirmar = st.checkbox(
+            "Confirmo que desejo excluir esta parada",
+            key=f"confirm_excluir_{parada.id}"
+        )
+
+        if confirmar:
+            if st.button(
+                "🗑️ EXCLUIR DEFINITIVAMENTE",
+                type="primary",
+                use_container_width=True
+            ):
                 try:
                     db.delete(parada)
                     db.commit()
@@ -516,8 +525,8 @@ with tab4:
                     db.rollback()
                     st.error(f"Erro ao excluir: {e}")
 
-
 db.close()
+
 
 
 
