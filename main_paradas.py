@@ -66,16 +66,19 @@ db = SessionLocal()
 
 # --- ABA 1: CADASTRO ---
 with tab1:
-    # Inicialização do Session State para persistência de dados
+    st.subheader("📝 Cadastro de Nova Unidade (Modo Campo)")
+    
+    # 1. Inicialização do Session State
     if 'lat_input' not in st.session_state: st.session_state.lat_input = -12.250000
     if 'lon_input' not in st.session_state: st.session_state.lon_input = -38.950000
+    
+    # Inicializa campos de texto se não existirem
     for field in ['rua_input', 'bairro_input', 'num_input', 'cep_input']:
         if field not in st.session_state: st.session_state[field] = ""
 
-   st.markdown("### 🗺️ Localização e GPS")
+    st.markdown("### 🗺️ Localização e GPS")
     
-    # Criamos o componente de execução JS mas não o guardamos em variável ainda
-    # Isso evita que ele fique tentando rodar sozinho em loop
+    # Script para forçar o GPS no clique do botão
     script_gps = """
         new Promise((resolve, reject) => {
             navigator.geolocation.getCurrentPosition(
@@ -86,15 +89,14 @@ with tab1:
         })
     """
 
+    # Botão para ativar o GPS
     if st.button("📍 CLIQUE PARA ATIVAR GPS", use_container_width=True, type="primary"):
-        # O clique dispara o JS exatamente agora
         loc_data = streamlit_js_eval(js_expressions=script_gps, key='force_gps_click')
         
         if loc_data and isinstance(loc_data, dict) and 'latitude' in loc_data:
             st.session_state.lat_input = loc_data['latitude']
             st.session_state.lon_input = loc_data['longitude']
             
-            # Geocodificação Reversa
             try:
                 rev = geolocator.reverse(f"{st.session_state.lat_input}, {st.session_state.lon_input}", timeout=5)
                 if rev:
@@ -108,28 +110,32 @@ with tab1:
             except:
                 st.warning("GPS capturado, mas erro ao buscar endereço. Use o mapa.")
         else:
-            st.info("🛰️ Tentando conexão com satélite... Se o pop-up de permissão aparecer, clique em 'Permitir'.")
+            st.info("🛰️ Tentando conexão... Se o navegador pedir, clique em 'Permitir'.")
 
-    # Mapa para ajuste fino (Satélite)
+    # Mapa de satélite
     m_cad = folium.Map(
         location=[st.session_state.lat_input, st.session_state.lon_input], 
         zoom_start=19,
         tiles="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
         attr="Google Satellite"
     )
-    folium.Marker([st.session_state.lat_input, st.session_state.lon_input], icon=folium.Icon(color="red", icon="bus", prefix="fa")).add_to(m_cad)
+    folium.Marker(
+        [st.session_state.lat_input, st.session_state.lon_input], 
+        icon=folium.Icon(color="red", icon="bus", prefix="fa")
+    ).add_to(m_cad)
     
     map_output = st_folium(m_cad, height=350, width=None, key="mapa_cadastro")
 
-    if map_output["last_clicked"]:
+    # Clique no mapa para ajuste manual
+    if map_output and map_output.get("last_clicked"):
         st.session_state.lat_input = map_output["last_clicked"]["lat"]
         st.session_state.lon_input = map_output["last_clicked"]["lng"]
         try:
             rev = geolocator.reverse(f"{st.session_state.lat_input}, {st.session_state.lon_input}")
             if rev:
                 addr = rev.raw.get('address', {})
-                st.session_state.rua_input = addr.get('road', addr.get('street', ''))
-                st.session_state.bairro_input = addr.get('suburb', addr.get('neighbourhood', ''))
+                st.session_state.rua_input = addr.get('road', '')
+                st.session_state.bairro_input = addr.get('suburb', '')
                 st.session_state.num_input = addr.get('house_number', '')
                 st.session_state.cep_input = addr.get('postcode', '')
                 st.rerun()
@@ -140,45 +146,38 @@ with tab1:
     # Formulário de Cadastro
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown("### 📍 Informações de Endereço")
-        id_parada = st.text_input("Número/ID da Parada*", placeholder="Ex: PA-101")
-        rua = st.text_input("Rua/Avenida*", value=st.session_state.rua_input)
-        num_loc = st.text_input("Número aproximado", value=st.session_state.num_input)
+        st.markdown("### 📍 Endereço")
+        id_parada = st.text_input("ID da Parada*", placeholder="Ex: PA-101")
+        rua = st.text_input("Rua*", value=st.session_state.rua_input)
+        num_loc = st.text_input("Nº", value=st.session_state.num_input)
         bairro = st.text_input("Bairro*", value=st.session_state.bairro_input)
-        cep = st.text_input("CEP", value=st.session_state.cep_input)
-        ponto_ref = st.text_area("Ponto de Referência")
         
     with col2:
-        st.markdown("### 🏗️ Características Técnicas")
-        tipo = st.selectbox("Tipo de Mobiliário*", ["Placa", "Abrigo", "Abrigo + Placa"])
-        sentido = st.selectbox("Sentido*", ["PC1 - PC2", "PC2 - PC1"])
-        st.info(f"📍 Latitude: {st.session_state.lat_input:.7f}\n\n📍 Longitude: {st.session_state.lon_input:.7f}")
-        foto = st.file_uploader("Capturar Foto", type=['jpg', 'png', 'jpeg'])
+        st.markdown("### 🏗️ Detalhes")
+        tipo = st.selectbox("Tipo*", ["Placa", "Abrigo", "Abrigo + Placa"])
+        sentido = st.selectbox("Sentido*", ["Centro", "Bairro", "PC1-PC2", "PC2-PC1"])
+        st.write(f"**Lat:** {st.session_state.lat_input:.6f}")
+        st.write(f"**Lon:** {st.session_state.lon_input:.6f}")
 
-    if st.button("💾 FINALIZAR E SALVAR REGISTRO", type="primary", use_container_width=True):
+    if st.button("💾 SALVAR REGISTRO", type="primary", use_container_width=True):
         if not id_parada or not rua or not bairro:
-            st.error("❌ Preencha os campos obrigatórios (ID, Rua e Bairro).")
+            st.error("Preencha os campos obrigatórios!")
         else:
             try:
                 nova_parada = Parada(
                     numero_parada=id_parada, rua=rua, numero_localizacao=num_loc,
-                    bairro=bairro, cep=cep, ponto_referencia=ponto_ref,
-                    sentido=sentido, tipo=tipo, latitude=st.session_state.lat_input,
-                    longitude=st.session_state.lon_input,
-                    foto_url=foto.name if foto else "sem_foto.jpg"
+                    bairro=bairro, sentido=sentido, tipo=tipo, 
+                    latitude=st.session_state.lat_input,
+                    longitude=st.session_state.lon_input
                 )
                 db.add(nova_parada)
                 db.commit()
-                st.success(f"✅ Parada {id_parada} salva com sucesso!")
-                st.balloons()
-                
-                # Reset para novo cadastro
-                for f in ['rua_input', 'bairro_input', 'num_input', 'cep_input']: st.session_state[f] = ""
+                st.success("✅ Salvo com sucesso!")
                 st.rerun()
             except Exception as e:
                 db.rollback()
                 st.error(f"Erro ao salvar: {e}")
-
+                
 # --- ABA 2: VISUALIZAÇÃO ---
 with tab2:
     st.subheader("📊 Inventário Georreferenciado")
@@ -200,4 +199,5 @@ with tab2:
 
 
 db.close()
+
 
