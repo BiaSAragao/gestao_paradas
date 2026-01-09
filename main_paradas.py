@@ -72,29 +72,43 @@ with tab1:
     for field in ['rua_input', 'bairro_input', 'num_input', 'cep_input']:
         if field not in st.session_state: st.session_state[field] = ""
 
-    st.markdown("### 🗺️ Localização e GPS")
+   st.markdown("### 🗺️ Localização e GPS")
     
-    # Captura GPS em Tempo Real
-    loc_data = streamlit_js_eval(js_expressions='navigator.geolocation.getCurrentPosition(pos => { return pos.coords; })', key='gps_capture')
+    # Criamos o componente de execução JS mas não o guardamos em variável ainda
+    # Isso evita que ele fique tentando rodar sozinho em loop
+    script_gps = """
+        new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(
+                pos => { resolve({latitude: pos.coords.latitude, longitude: pos.coords.longitude}); },
+                err => { reject(err.message); },
+                {enableHighAccuracy: true, timeout: 5000}
+            );
+        })
+    """
 
-    col_gps, col_ajuda = st.columns([1, 2])
-    with col_gps:
-        if st.button("📍 CAPTURAR MINHA LOCALIZAÇÃO ATUAL", use_container_width=True, type="primary"):
-            if loc_data:
-                st.session_state.lat_input = loc_data['latitude']
-                st.session_state.lon_input = loc_data['longitude']
-                try:
-                    rev = geolocator.reverse(f"{st.session_state.lat_input}, {st.session_state.lon_input}", timeout=10)
-                    if rev:
-                        addr = rev.raw.get('address', {})
-                        st.session_state.rua_input = addr.get('road', addr.get('street', ''))
-                        st.session_state.bairro_input = addr.get('suburb', addr.get('neighbourhood', ''))
-                        st.session_state.num_input = addr.get('house_number', '')
-                        st.session_state.cep_input = addr.get('postcode', '')
-                        st.rerun()
-                except: pass
-            else:
-                st.warning("Aguardando permissão de GPS do navegador...")
+    if st.button("📍 CLIQUE PARA ATIVAR GPS", use_container_width=True, type="primary"):
+        # O clique dispara o JS exatamente agora
+        loc_data = streamlit_js_eval(js_expressions=script_gps, key='force_gps_click')
+        
+        if loc_data and isinstance(loc_data, dict) and 'latitude' in loc_data:
+            st.session_state.lat_input = loc_data['latitude']
+            st.session_state.lon_input = loc_data['longitude']
+            
+            # Geocodificação Reversa
+            try:
+                rev = geolocator.reverse(f"{st.session_state.lat_input}, {st.session_state.lon_input}", timeout=5)
+                if rev:
+                    addr = rev.raw.get('address', {})
+                    st.session_state.rua_input = addr.get('road', addr.get('street', ''))
+                    st.session_state.bairro_input = addr.get('suburb', addr.get('neighbourhood', ''))
+                    st.session_state.num_input = addr.get('house_number', '')
+                    st.session_state.cep_input = addr.get('postcode', '')
+                    st.success("✅ GPS Sincronizado!")
+                    st.rerun()
+            except:
+                st.warning("GPS capturado, mas erro ao buscar endereço. Use o mapa.")
+        else:
+            st.info("🛰️ Tentando conexão com satélite... Se o pop-up de permissão aparecer, clique em 'Permitir'.")
 
     # Mapa para ajuste fino (Satélite)
     m_cad = folium.Map(
@@ -186,3 +200,4 @@ with tab2:
 
 
 db.close()
+
