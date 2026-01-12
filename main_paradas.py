@@ -484,19 +484,20 @@ with tab4:
 
                 st.markdown("#### 📷 Foto")
 
-                if parada.foto_url:
-                     st.image(
+                if parada.foto_url and parada.foto_url.startswith("http"):
+                    st.image(
                         parada.foto_url,
                         caption="Foto atual da parada",
                         use_container_width=True
                     )
                 else:
-                    st.caption("Nenhuma foto cadastrada")
-                    
+                    st.info("Esta parada ainda não possui foto válida.")
+                
                 foto_nova = st.file_uploader(
                     "Adicionar / Alterar foto",
                     type=["jpg", "jpeg", "png"]
                 )
+
 
             salvar = st.form_submit_button(
                 "💾 SALVAR ALTERAÇÕES",
@@ -557,6 +558,7 @@ with tab4:
                     st.error(f"Erro ao excluir: {e}")
 
 db.close()
+
 
 
 
