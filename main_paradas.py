@@ -278,9 +278,12 @@ with tab2:
 
     if todas:
         df = pd.DataFrame([{
-            "ID": p.numero_parada,
+            "ID": p.numero_parada or "Sem identificação",
             "Rua": normalizar_texto(p.rua),
             "Bairro": normalizar_texto(p.bairro),
+            "Ponto de Referência": p.ponto_referencia,
+            "Tipo": p.tipo,
+            "Sentido": p.sentido,
             "LAT": float(p.latitude),
             "LON": float(p.longitude)
         } for p in todas])
@@ -320,7 +323,17 @@ with tab2:
             st_folium(m, height=550, use_container_width=True, key="mapa_view")
 
         render_mapa_view(df_f)
-        st.dataframe(df_f, use_container_width=True)
+        st.dataframe(
+            df_f[[
+                "ID",
+                "Rua",
+                "Bairro",
+                "Ponto de Referência",
+                "Tipo",
+                "Sentido"
+            ]],
+            use_container_width=True
+        )
 
     else:
         st.info("Nenhuma parada cadastrada.")
@@ -558,6 +571,7 @@ with tab4:
                     st.error(f"Erro ao excluir: {e}")
 
 db.close()
+
 
 
 
