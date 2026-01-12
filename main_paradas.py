@@ -12,6 +12,10 @@ from streamlit_folium import st_folium
 from geopy.geocoders import Nominatim
 from streamlit_js_eval import streamlit_js_eval
 
+import boto3
+from uuid import uuid4
+
+
 # ================== FUNÇÕES AUXILIARES ==================
 def normalizar_texto(txt):
     if not txt:
@@ -66,6 +70,33 @@ Base.metadata.create_all(bind=engine)
 db = SessionLocal()
 
 geolocator = Nominatim(user_agent="sipo_semob_fsa_v6")
+
+#==================== Upload Fotos =========================
+def get_r2_client():
+    return boto3.client(
+        "s3",
+        endpoint_url=st.secrets["R2_ENDPOINT"],
+        aws_access_key_id=st.secrets["R2_ACCESS_KEY"],
+        aws_secret_access_key=st.secrets["R2_SECRET_KEY"],
+        region_name="auto"
+    )
+
+
+def upload_foto_r2(file, parada_id):
+    r2 = get_r2_client()
+
+    ext = file.name.split(".")[-1]
+    nome_arquivo = f"paradas/{parada_id}_{uuid4()}.{ext}"
+
+    r2.upload_fileobj(
+        file,
+        st.secrets["R2_BUCKET"],
+        nome_arquivo,
+        ExtraArgs={"ContentType": file.type}
+    )
+
+    return f"{st.secrets['R2_PUBLIC_URL']}/{nome_arquivo}"
+
 
 # ================== STREAMLIT ==================
 st.set_page_config(
@@ -218,12 +249,15 @@ with tab1:
                         tipo=tipo_p,
                         latitude=st.session_state.lat_input,
                         longitude=st.session_state.lon_input,
-                        foto_url=foto.name if foto else "sem_foto.jpg"
+                        
                     )
-
 
                     db.add(nova)
                     db.commit()
+                    if foto:
+                        url_foto = upload_foto_r2(foto, nova.id)
+                        nova.foto_url = url_foto
+                        db.commit()
                     st.success("✅ Parada cadastrada com sucesso!")
                     st.balloons()
                 except Exception as e:
@@ -449,9 +483,16 @@ with tab4:
                 st.write(f"📌 Lon: {float(parada.longitude):.6f}")
 
                 st.markdown("#### 📷 Foto")
-                if parada.foto_url:
-                    st.caption(f"Arquivo atual: {parada.foto_url}")
 
+                if parada.foto_url:
+                     st.image(
+                        parada.foto_url,
+                        caption="Foto atual da parada",
+                        use_container_width=True
+                    )
+                else:
+                    st.caption("Nenhuma foto cadastrada")
+                    
                 foto_nova = st.file_uploader(
                     "Adicionar / Alterar foto",
                     type=["jpg", "jpeg", "png"]
@@ -479,7 +520,9 @@ with tab4:
 
                         # Salva apenas o caminho/nome (ideal p/ outro banco ou storage)
                         if foto_nova:
-                            parada.foto_url = foto_nova.name
+                            url_foto = upload_foto_r2(foto_nova, parada.id)
+                            parada.foto_url = url_foto
+
 
                         db.commit()
                         st.session_state.msg_sucesso = "✅ Parada atualizada com sucesso!"
@@ -514,6 +557,7 @@ with tab4:
                     st.error(f"Erro ao excluir: {e}")
 
 db.close()
+
 
 
 
